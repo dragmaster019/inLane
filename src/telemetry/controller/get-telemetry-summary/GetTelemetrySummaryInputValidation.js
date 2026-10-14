@@ -1,7 +1,4 @@
 'use strict'
-// TelemetrySummaryInputValidation.js — INPUT VALIDATION for Part 2.
-// Rules: device_id, from, to required. from/to epoch millis integers.
-// from > to -> 400. Missing/invalid -> 400 with clear message.
 
 export class SummaryValidationError extends Error {
   constructor(message) {

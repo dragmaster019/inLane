@@ -1,7 +1,4 @@
 'use strict'
-// utils/logger.js — minimal structured logger mirroring repo's
-// logger.info / logger.debug / logger.error + withRequest(event, context).
-// Everything in handler -> validation -> preprocessor -> processor is logged.
 
 const levelPriority = { debug: 10, info: 20, error: 30 }
 const currentLevel = (process.env.LOG_LEVEL ?? 'debug').toLowerCase()
@@ -34,7 +31,6 @@ const log = (level, objOrMsg, msg) => {
     ...(message ? { msg: message } : {}),
     ...payload
   }
-  // JSON lines -> easy to grep, same habit as CloudWatch in AWS version
   // eslint-disable-next-line no-console
   console.log(JSON.stringify(line))
 }

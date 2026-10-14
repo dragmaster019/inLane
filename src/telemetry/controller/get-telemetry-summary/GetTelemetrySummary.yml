@@ -1,5 +1,4 @@
-# GetTelemetrySummary.yml — route contract for Part 2 (same style as ingest yml).
-
+# summary route
 service: inlane-telemetry-summary
 handler: src/telemetry/controller/get-telemetry-summary/GetTelemetrySummary.getTelemetrySummaryHandler
 
@@ -8,11 +7,11 @@ http:
     path: /api/v1/telemetry/summary
     handler: getTelemetrySummaryHandler
     queryParams:
-      - device_id # required, non-empty string
-      - from      # required, epoch millis int, inclusive
-      - to        # required, epoch millis int, inclusive
+      - device_id
+      - from
+      - to
     successStatus: 200
-    failureStatus: 400 # missing param or from > to
+    failureStatus: 400
 
 environment:
   DB_HOST: ${env:DB_HOST}
@@ -21,7 +20,3 @@ environment:
   DB_PASSWORD: ${env:DB_PASSWORD}
   DB_NAME: ${env:DB_NAME}
   LOG_LEVEL: ${env:LOG_LEVEL}
-
-notes:
-  - Single SQL aggregate (COUNT, AVG, MAX(SQRT)) over indexed range, no full scan.
-  - Empty window returns event_count 0 + nulls with HTTP 200.

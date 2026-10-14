@@ -1,9 +1,4 @@
 'use strict'
-// TelemetryIngestInputValidation.js — INPUT VALIDATION stage.
-// Mirrors repo's MainInputValidation file.
-// Two tiers (per assignment):
-//   1) Request-level -> throw RequestValidationError (HTTP 400, whole request rejected)
-//   2) Per-event     -> return { valid, errors[] } (partial success, HTTP 200)
 
 export class RequestValidationError extends Error {
   constructor(message) {
@@ -27,13 +22,10 @@ const REQUIRED_EVENT_FIELDS = [
 ]
 
 export const MAX_BATCH_SIZE = 500
-export const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000 // 24h
+export const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000
 
 const isNumeric = (v) => typeof v === 'number' && Number.isFinite(v)
 
-/**
- * Request-level validation. Throws on failure (whole batch rejected with 400).
- */
 export const validateIngestRequest = (body) => {
   if (!body || typeof body !== 'object') {
     throw new RequestValidationError('Request body must be a JSON object.')
@@ -53,10 +45,6 @@ export const validateIngestRequest = (body) => {
   }
 }
 
-/**
- * Per-event validation. Never throws — returns reason string or null.
- * An event failing ANY rule is rejected (not stored).
- */
 export const validateEvent = (ev, nowMs) => {
   if (!ev || typeof ev !== 'object') return 'event must be an object'
 
@@ -64,7 +52,6 @@ export const validateEvent = (ev, nowMs) => {
     if (ev[f] === undefined || ev[f] === null) return `missing required field: ${f}`
   }
 
-  // timestamp: positive integer, not more than 24h in future vs server time
   if (!Number.isInteger(ev.timestamp) || ev.timestamp <= 0) {
     return 'timestamp must be a positive integer (epoch millis)'
   }
@@ -86,5 +73,5 @@ export const validateEvent = (ev, nowMs) => {
     if (!isNumeric(ev[f])) return `${f} must be numeric`
   }
 
-  return null // valid
+  return null
 }

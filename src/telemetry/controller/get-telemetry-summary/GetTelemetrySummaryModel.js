@@ -1,7 +1,4 @@
 'use strict'
-// TelemetrySummaryModel.js — MainModel for Part 2.
-// Single indexed aggregate query: uses uq_device_ts leftmost prefix
-// (device_id equality + event_ts_ms range, both bounds inclusive via BETWEEN).
 
 export const buildSummaryQuery = () => `
   SELECT

@@ -1,6 +1,4 @@
 'use strict'
-// server.js — local bootstrap (replaces AWS Lambda + API Gateway).
-// Only the 2 required APIs + health.
 
 import 'dotenv/config'
 import express from 'express'
@@ -24,7 +22,6 @@ app.get('/health', async (_req, res) => {
   }
 })
 
-// eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   logger.error({ error: err?.message }, 'Unhandled error.')
   res.status(500).json({ error: 'Internal server error.' })
@@ -32,5 +29,5 @@ app.use((err, _req, res, _next) => {
 
 const PORT = Number(process.env.PORT ?? 3000)
 app.listen(PORT, () => {
-  logger.info({ port: PORT }, `Telemetry service listening (local, no AWS).`)
+  logger.info({ port: PORT }, 'Server running.')
 })

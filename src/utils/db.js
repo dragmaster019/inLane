@@ -1,7 +1,4 @@
 'use strict'
-// utils/db.js — local MySQL connection (replaces AWS getDbConnection + SSM params).
-// Usage: import { getDbConnection, closePool } from '../../../utils/db.js'
-// Env: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_CONNECTION_LIMIT
 
 import mysql from 'mysql2/promise'
 import { logger } from './logger.js'
@@ -39,14 +36,12 @@ export const getPool = () => {
     connectionLimit: Number(process.env.DB_CONNECTION_LIMIT ?? 10),
     queueLimit: 0,
     enableKeepAlive: true,
-    timezone: '+00:00' // store/compare in UTC, epoch millis is TZ-safe
+    timezone: '+00:00'
   })
 
   return pool
 }
 
-// Mirror of repo's getDbConnection(dbConnection, useReaderInstance) signature
-// so handler code reads the same as the AUM service.
 export const getDbConnection = async () => {
   const p = getPool()
   const conn = await p.getConnection()

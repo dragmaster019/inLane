@@ -1,7 +1,4 @@
-# CreateTelemetryIngest.yml — route contract (local equivalent of the AUM service's
-# serverless.yml block). The AUM file maps handler + schedule + env + VPC;
-# locally we map handler + HTTP route + env + DB.
-
+# ingest route
 service: inlane-telemetry-ingest
 handler: src/telemetry/controller/create-telemetry-ingest/CreateTelemetryIngest.createTelemetryIngestHandler
 
@@ -9,18 +6,9 @@ http:
   - method: POST
     path: /api/v1/telemetry/ingest
     handler: createTelemetryIngestHandler
-    bodyLimit: 1mb            # 500 events * ~200 bytes ≈ 100KB, 1mb is safe headroom
+    bodyLimit: 1mb
     successStatus: 200
-    requestFailureStatus: 400 # missing/empty device_id, missing/empty events, batch > 500
-
-  - method: GET
-    path: /api/v1/telemetry/query
-    handler: queryHandler
-    description: Time-range read per device (proves index design)
-
-  - method: GET
-    path: /health
-    handler: healthHandler
+    requestFailureStatus: 400
 
 environment:
   DB_HOST: ${env:DB_HOST}
@@ -30,8 +18,3 @@ environment:
   DB_NAME: ${env:DB_NAME}
   LOG_LEVEL: ${env:LOG_LEVEL}
 
-# AWS parity notes (for Doc 2 / scaling discussion):
-# - AUM cron  -> here: stateless HTTP, scales horizontally behind ALB
-# - SSM params -> here: .env (dotenv), same keys
-# - VPC/RDS   -> here: local MySQL; in AWS use RDS Proxy + reader/writer split
-# - S3/EventBridge mail -> out of scope for Part 1 ingest
