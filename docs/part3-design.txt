@@ -32,6 +32,14 @@ outgrows RAM within hours, inserts turn into random disk I/O, the unique-key
 check becomes the bottleneck, one disk fills in under a day, and every
 summary query scans billions of rows. Writes stall before reads do.
 
+How current vs history works: the live table only holds recent data (Timestream
+memory store, last ~24h). A Firehose stream copies every batch to S3 Parquet at
+write time, and a daily Step Functions job moves anything older than 24h out of
+hot into magnetic store, and anything older than 90 days is S3-only (Glacier).
+So: current table = small, fast, last 24h; history = S3 Parquet partitioned by
+date/device, queried by Athena when needed. Late events still land in the right
+day-partition by their event timestamp, not arrival time, so history stays correct.
+
 2. Failure and load behaviour
 
 Late event (45 min late, summary already served): it is still accepted and
