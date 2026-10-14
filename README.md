@@ -16,7 +16,6 @@ src/utils/db.js, src/utils/logger.js
 src/telemetry/controller/create-telemetry-ingest/   # POST handler + validation + model
 src/telemetry/controller/get-telemetry-summary/     # GET handler + validation + model
 server.js
-scripts/test-edgecases.mjs
 screenshot/   # postman + db screenshots
 ```
 
@@ -44,8 +43,6 @@ curl "http://localhost:3000/api/v1/telemetry/summary?device_id=DVC-1029&from=173
 # empty window
 curl "http://localhost:3000/api/v1/telemetry/summary?device_id=DVC-1029&from=1000000000000&to=1000000001000"
 ```
-
-Or run the full check: `node scripts/test-edgecases.mjs` (33 cases).
 
 ## DB
 
