@@ -49,5 +49,25 @@ Or run the full check: `node scripts/test-edgecases.mjs` (33 cases).
 
 ## DB
 
-One table `telemetry_events`. `(device_id, event_ts_ms)` is unique — that handles
-duplicate retries and keeps the time-range lookup fast. Same key the summary query uses.
+One table `telemetry_events` (see `sql/001_create_telemetry_db.sql`).
+One row per event: `device_id`, `event_ts_ms` (epoch millis), lat/lon, speed,
+accel x/y/z, gyro x/y/z, plus `event_time` (same instant as datetime, easier to read)
+and `created_at` (when the server got it).
+
+Indexes: `PRIMARY (id)`, `UNIQUE (device_id, event_ts_ms)`, plain index on `event_time`.
+The unique key does two jobs — it stops duplicates and it serves the main lookup
+`WHERE device_id=? AND event_ts_ms BETWEEN ? AND ?` (device equality + time range
+off the same B-tree). The summary endpoint runs one aggregate over that range
+(`COUNT, AVG(speed), MAX(...)`), no full scan.
+
+Duplicates: in-batch ones are caught with a Set (first wins, rest counted as
+duplicates). Across requests, `INSERT IGNORE` + the unique key means a retry just
+skips the row — `affectedRows` tells us how many were actually new. If two requests
+with the same device+timestamp arrive at the same time, the unique key still only
+lets one row through; the loser is ignored and counted as a duplicate instead of
+erroring. So concurrent retries stay correct, just one may do a bit of wasted work.
+
+If this went to production I'd put a queue (SQS/Kafka) in front of the writer so
+bursts don't hit MySQL directly, and split reads to a replica. Single change with
+the most payoff at 10-50 events/sec/device.
+
