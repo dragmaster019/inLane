@@ -1,0 +1,80 @@
+Part 3 — System Design (telemetry backend)
+
+1. Throughput and storage
+
+Math (showing working):
+- Devices: 10,000. One batch per device every 2 seconds.
+- Requests/sec = 10,000 / 2 = 5,000 req/s.
+- Sampling 10-50 Hz = 10-50 events/sec/device. Per batch (2 s) = 20-100
+  events, which fits the 500 cap.
+- Events/sec low end = 10,000 x 20 / 2 = 100,000/s.
+- Events/sec high end = 10,000 x 100 / 2 = 500,000/s.
+- Mid case (30 Hz, 60/batch) = 300,000/s.
+
+Storage per day:
+- Assumption: ~150 bytes per stored event. Rough split: 8 (timestamp)
+  + 8 (device hash) + 4+4 (lat/lon as floats) + 4 (speed) + 24 (6 x 4-byte
+  accel/gyro) + ~40 row + index overhead + compression ignored. Intake JSON
+  on the wire is bigger (~220 bytes) but we don't store that.
+- Low: 100,000 x 86,400 x 150 B = 8.64B events x 150 B ~= 1.3 TB/day.
+- High: 500,000 x 86,400 x 150 B = 43.2B events x 150 B ~= 6.5 TB/day.
+- Mid (~300k/s): ~3.9 TB/day before replicas. Keep 90 days hot-ish and the
+  rest in cold archive.
+
+Database: Amazon Timestream. Partitioning: time (daily partitions, automatic)
+with device_id as the dimension, older partitions moved to magnetic store.
+I picked it over RDS MySQL (can't sustain 100k+ writes/s on one node) and
+over DynamoDB (would need hand-rolled time sharding and gets expensive at
+this write rate; Timestream tiers and SQL-queries time ranges natively).
+
+What breaks first without partitioning: the single (device, time) B-tree
+outgrows RAM within hours, inserts turn into random disk I/O, the unique-key
+check becomes the bottleneck, one disk fills in under a day, and every
+summary query scans billions of rows. Writes stall before reads do.
+
+2. Failure and load behaviour
+
+Late event (45 min late, summary already served): it is still accepted and
+stored — my validation only rejects >24h-future timestamps, late data is fine.
+The already-served summary is not corrected; the next summary call for that
+window includes the late event because summaries are computed on read, not
+cached. So old responses stay as-were, new ones are right.
+
+Same batch retried 3 times (device got no response): first attempt stores the
+rows, attempts 2 and 3 hit the unique (device_id, timestamp) key and are
+ignored via INSERT IGNORE, counted as duplicates, no second rows, response
+still 200. If two retries race each other, the unique key lets exactly one
+row through; the loser is counted as duplicate, never an error.
+
+10x traffic in one minute (5k -> 50k req/s): API Gateway throttles per-key,
+SQS buffers the spike (queue depth grows instead of MySQL falling over),
+Fargate writers scale out on queue depth, p99 ingest latency rises and CloudWatch
+alarms fire, summaries stay correct but slightly stale until the backlog drains.
+What I give up: immediate 200s under extreme spike — excess gets 429 + retry,
+rather than letting the database die.
+
+3. AWS implementation
+
+- Ingestion: API Gateway in front. Why over plain ALB: built-in throttling,
+  API keys per device group, and request validation before anything runs.
+- Buffering: SQS Standard (+ dead-letter queue). Why over Kinesis: batches are
+  independent and idempotent, I need cheap infinite buffering + DLQ + backpressure,
+  not ordered per-shard streaming or sub-second analytics.
+- Compute (hot path): Lambda for request validation (bursty, scales to zero),
+  Fargate workers for bulk DB writes (long-lived, connection pooling, 500-row
+  multi-inserts). Why Fargate over Lambda-only: sustained 500k writes/s on Lambda
+  gets costly and hammers DB connections; workers batch and reuse them.
+- Storage: Timestream (hot, memory store ~24h) auto-tiering to magnetic store,
+  plus Kinesis Firehose archiving raw batches to S3 Parquet. Why Timestream over
+  DynamoDB/RDS: native time partitioning and range SQL; DynamoDB would need manual
+  time shards, RDS MySQL can't take the write rate. Why S3 over keeping everything
+  hot: 1-6 TB/day is cheap in Parquet + lifecycle to Glacier, queryable by Athena.
+- Scheduled jobs: Step Functions (nightly/quarterly aggregates, e.g. the AUM-style
+  CSV report). Why over cron Lambda: multi-step with retries and a visible state
+  machine (query -> build CSV -> S3 -> notify).
+- Notify: SQS/Step Functions -> Lambda -> SES email with S3 presigned link.
+  Why SES over SNS: reports need attachments/links to a mailbox, not pub/sub fanout.
+- Observability: CloudWatch metrics/alarms/logs on API Gateway, SQS depth,
+  Fargate CPU, Timestream writes, DLQ count. Why over self-hosted Prometheus:
+  zero servers, integrates with all of the above, free tier covers this scale
+  of logs/metrics to start.
