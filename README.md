@@ -52,7 +52,7 @@ accel x/y/z, gyro x/y/z, plus `event_time` (same instant as datetime, easier to 
 and `created_at` (when the server got it).
 
 Indexes: `PRIMARY (id)`, `UNIQUE (device_id, event_ts_ms)`, plain index on `event_time`.
-The unique key does two jobs — it stops duplicates and it serves the main lookup
+The unique key covers two things — it stops duplicates and it serves the main lookup
 `WHERE device_id=? AND event_ts_ms BETWEEN ? AND ?` (device equality + time range
 off the same B-tree). The summary endpoint runs one aggregate over that range
 (`COUNT, AVG(speed), MAX(...)`), no full scan.
@@ -65,6 +65,7 @@ lets one row through; the loser is ignored and counted as a duplicate instead of
 erroring. So concurrent retries stay correct, just one may do a bit of wasted work.
 
 If this went to production I'd put a queue (SQS/Kafka) in front of the writer so
-bursts don't hit MySQL directly, and split reads to a replica. Single change with
-the most payoff at 10-50 events/sec/device.
+bursts don't hit MySQL directly, and split reads to a replica. If I had to pick
+one change, the queue first — at 10-50 events/sec per device the writes are what
+fall over first.
 
